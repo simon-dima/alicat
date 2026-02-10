@@ -393,6 +393,30 @@ class ControllerMixin:
         """Write command and return response. Provided by AlicatDevice."""
         raise NotImplementedError
 
+    async def _set_setpoint_int(self, value: int) -> None:
+        """Set the setpoint as an integer representing percentage of full scale.
+
+        This is an alternative to setting setpoints as floating-point values.
+        The integer 0 represents 0% (zero setpoint) and 64000 represents 100%
+        (full scale). For bidirectional controllers, 32000 represents 0%,
+        with 0 = -100% and 64000 = +100%.
+
+        Args:
+            value: Integer setpoint, must be in range 0-64000 inclusive.
+
+        Raises:
+            TypeError: If value is not an integer.
+            ValueError: If value is outside the range 0-64000.
+        """
+        if not isinstance(value, int):
+            raise TypeError(f"value must be an integer, got {type(value).__name__}")
+        if not 0 <= value <= 64000:
+            raise ValueError(f"value must be between 0 and 64000, got {value}")
+        command = f'{self.unit}{value}'
+        line = await self._write_and_read(command)
+        if not line or line == '?':
+            raise OSError("Could not set setpoint.")
+
     async def _set_setpoint(self, setpoint: float) -> None:
         """Set the target setpoint.
 
@@ -614,7 +638,7 @@ class FlowController(FlowMeter, ControllerMixin):
         Args:
             flow: The target flow rate, in units specified at time of purchase
         """
-        if self.control_point in ['abs pressure', 'gauge pressure', 'diff pressure']:
+        if self.control_point not in ['mass flow', 'vol flow']:
             await self._set_setpoint(0)
             await self._set_control_point('mass flow')
         await self._set_setpoint(flowrate)
@@ -626,10 +650,48 @@ class FlowController(FlowMeter, ControllerMixin):
             pressure: The target pressure, in units specified at time of
                 purchase. Likely in psia.
         """
-        if self.control_point in ['mass flow', 'vol flow']:
+        if self.control_point not in ['abs pressure', 'gauge pressure', 'diff pressure']:
             await self._set_setpoint(0)
             await self._set_control_point('abs pressure')
         await self._set_setpoint(pressure)
+
+    async def set_flow_rate_int(self, value: int) -> None:
+        """Set the target flow rate as an integer percentage of full scale.
+
+        The integer 0 represents 0% (zero setpoint) and 64000 represents 100%
+        (full scale). For bidirectional controllers, 32000 represents 0%,
+        with 0 = -100% and 64000 = +100%.
+
+        Args:
+            value: Integer setpoint, must be in range 0-64000 inclusive.
+
+        Raises:
+            TypeError: If value is not an integer.
+            ValueError: If value is outside the range 0-64000.
+        """
+        if self.control_point not in ['mass flow', 'vol flow']:
+            await self._set_setpoint(0)
+            await self._set_control_point('mass flow')
+        await self._set_setpoint_int(value)
+
+    async def set_pressure_int(self, value: int) -> None:
+        """Set the target pressure as an integer percentage of full scale.
+
+        The integer 0 represents 0% (zero setpoint) and 64000 represents 100%
+        (full scale). For bidirectional controllers, 32000 represents 0%,
+        with 0 = -100% and 64000 = +100%.
+
+        Args:
+            value: Integer setpoint, must be in range 0-64000 inclusive.
+
+        Raises:
+            TypeError: If value is not an integer.
+            ValueError: If value is outside the range 0-64000.
+        """
+        if self.control_point not in ['abs pressure', 'gauge pressure', 'diff pressure']:
+            await self._set_setpoint(0)
+            await self._set_control_point('abs pressure')
+        await self._set_setpoint_int(value)
 
     async def get_totalizer_batch(self, batch: int = 1) -> str:
         """Get the totalizer batch volume (firmware 10v00).
@@ -749,3 +811,19 @@ class PressureController(PressureMeter, ControllerMixin):
                 purchase. Likely in psia.
         """
         await self._set_setpoint(pressure)
+
+    async def set_pressure_int(self, value: int) -> None:
+        """Set the target pressure as an integer percentage of full scale.
+
+        The integer 0 represents 0% (zero setpoint) and 64000 represents 100%
+        (full scale). For bidirectional controllers, 32000 represents 0%,
+        with 0 = -100% and 64000 = +100%.
+
+        Args:
+            value: Integer setpoint, must be in range 0-64000 inclusive.
+
+        Raises:
+            TypeError: If value is not an integer.
+            ValueError: If value is outside the range 0-64000.
+        """
+        await self._set_setpoint_int(value)
